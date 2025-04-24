@@ -684,18 +684,3 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
-
-
-print("- Hold right click to activate aimbot")
-print("- Press H to toggle target hitbox (Head, HumanoidRootPart, Torso)")
-print("- Press [ and ] to adjust FOV size")
-print("- Press E to toggle all ESP features")
-print("- Press B to toggle bone ESP visualization")
-print("- Press - and = to adjust ESP distance")
-print("- Press End to unload script")
-print("- ESP features: ")
-print("  • Only shows players within " .. MAX_ESP_DISTANCE .. " studs")
-print("  • BONE ESP ONLY - showing player skeletons (thickness 2.5)")
-print("  • Snap line thickness increased to 3.0")
-print("  • Improved bone ESP rendering & cleanup system")
-print("  • Red bones for regular players, green for targets")

@@ -1,310 +1,301 @@
---[[
-    ENHANCED RIVALS AIMBOT
-    Improved aimbot with smooth physics-based dragging
-    
-    FEATURES:
-    - Physics-based smooth mouse movement (not snapping)
-    - Hold right mouse button to aim at closest player's head
-    - Press End key to completely unload the script
-    
-    HOW TO USE:
-    1. Copy this entire script
-    2. Paste it into your Roblox executor
-    3. Join a Roblox game
-    4. Execute the script
-    5. Hold right mouse button to activate aimbot
-]]
-
--- Check if already loaded
-if _G.AimbotLoaded then
-    return
-end
-
--- Mark as loaded
-_G.AimbotLoaded = true
-
--- Settings (can be changed)
-_G.AimbotSettings = {
-    FOV = 200,                -- Field of view circle size (smaller as requested)
-    AimPart = "Head",         -- Part to aim at (Head, HumanoidRootPart, Torso)
-    TeamCheck = false,        -- Don't aim at teammates
-    Prediction = 0,           -- No prediction as requested
-    Smoothness = 0.3,         -- Lower = faster aim (0.01-1) - slower aiming
-    VisibleCheck = false,     -- Only target visible players
-    ShowFOV = true,           -- Show FOV circle
-    MaxSpeed = 14,            -- Maximum mouse movement speed (reduced for slower aim)
-    AimKey = Enum.UserInputType.MouseButton2,  -- Right mouse button
-    DragFactor = 0.9,         -- Physics drag (lower = more drag) - increased drag for slower aim
-    Jitter = 0.02,            -- Random movement for human-like aim (reduced)
-    JitterEnabled = true,     -- Enable random jitter
-    
-    -- Snap line settings
-    ShowSnapLine = true,      -- Show line from center to target
-    SnapLineColor = Color3.fromRGB(0, 255, 0), -- Green snap line
-    SnapLineThickness = 1.5,  -- Thickness of snap line
-    
-    -- Always move mouse (even when not aiming)
-    AlwaysTrack = false       -- Only track when holding right mouse button
-}
-
--- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
 
--- Variables
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
-local FOVCircle
-local SnapLine
-local CurrentTarget = nil
-local Aiming = false
-local AimStart = 0         -- Time when aim button was pressed
-local AimDelay = 0.3       -- Delay in seconds before aimbot activates
-local Connection
-local CurrentVelocity = Vector2.new(0, 0)
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
--- Create FOV circle and snap line
-local function CreateDrawings()
-    -- Remove existing drawings
-    if FOVCircle then
-        FOVCircle:Remove()
-    end
+-- Configuration (easily customizable)
+local FOV_RADIUS = 200 -- FOV circle radius (adjust with [ and ] keys)
+local FOV_COLOR = Color3.fromRGB(255, 255, 255) -- White FOV circle
+local SNAPLINE_COLOR = Color3.fromRGB(255, 0, 0) -- Red snapline
+local HEAD_CIRCLE_COLOR = Color3.fromRGB(0, 255, 0) -- Green head circle
+local HEAD_CIRCLE_RADIUS = 10 -- Size of circle around target's head
+local AIMBOT_SMOOTHNESS = 0.25 -- Mouse movement smoothness (0.1-0.5 recommended, lower = faster)
+
+-- State variables
+local targetPlayer = nil
+local isAimbotActive = false
+local isRightMouseDown = false
+local autoClickConnection = nil
+local lastClickTime = 0 -- Track the last time we clicked
+local scriptActive = true
+local targetHitbox = "Head" -- Target hitbox (Head, HumanoidRootPart, etc.)
+
+-- Drawing objects
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible = false
+fovCircle.Transparency = 0.7
+fovCircle.Color = FOV_COLOR
+fovCircle.Thickness = 2
+fovCircle.NumSides = 64
+fovCircle.Radius = FOV_RADIUS
+fovCircle.Filled = false
+
+local snapLine = Drawing.new("Line")
+snapLine.Visible = false
+snapLine.Thickness = 1.5
+snapLine.Color = SNAPLINE_COLOR
+
+local headCircle = Drawing.new("Circle")
+headCircle.Visible = false
+headCircle.Transparency = 0.7
+headCircle.Color = HEAD_CIRCLE_COLOR
+headCircle.Thickness = 2
+headCircle.NumSides = 30
+headCircle.Radius = HEAD_CIRCLE_RADIUS
+headCircle.Filled = false
+
+-- Helper functions
+-- Check if in lobby (customize based on your game)
+local function isLobbyVisible()
+    -- Try-catch for compatibility with different games
+    local success, result = pcall(function()
+        if localPlayer.PlayerGui:FindFirstChild("MainGui") then
+            return localPlayer.PlayerGui.MainGui.MainFrame.Lobby.Currency.Visible == true
+        end
+        return false
+    end)
     
-    if SnapLine then
-        SnapLine:Remove()
-    end
-    
-    -- Create FOV circle
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Visible = _G.AimbotSettings.ShowFOV
-    FOVCircle.Filled = false
-    FOVCircle.Thickness = 2
-    FOVCircle.Transparency = 1
-    FOVCircle.Color = Color3.fromRGB(255, 0, 0)
-    FOVCircle.Radius = _G.AimbotSettings.FOV
-    
-    -- Create snap line
-    SnapLine = Drawing.new("Line")
-    SnapLine.Visible = _G.AimbotSettings.ShowSnapLine
-    SnapLine.Color = _G.AimbotSettings.SnapLineColor
-    SnapLine.Thickness = _G.AimbotSettings.SnapLineThickness
-    SnapLine.Transparency = 1
-    SnapLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    SnapLine.To = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    return success and result
 end
 
--- Find closest player to mouse
-local function GetClosestPlayer()
-    local MaxDistance = _G.AimbotSettings.FOV
-    local Target = nil
+local function getClosestPlayerInFOV()
+    local closestPlayer = nil
+    local shortestDistance = FOV_RADIUS
+    local mousePosition = UserInputService:GetMouseLocation()
+    local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     
-    -- Update FOV circle position to center of screen
-    if FOVCircle then
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    end
-    
-    -- Loop through all players
-    for _, Player in pairs(Players:GetPlayers()) do
-        if Player == LocalPlayer then continue end
-        
-        -- Team check
-        if _G.AimbotSettings.TeamCheck and Player.Team == LocalPlayer.Team then continue end
-        
-        -- Character check
-        local Character = Player.Character
-        if not Character then continue end
-        
-        -- Target part check
-        local TargetPart = Character:FindFirstChild(_G.AimbotSettings.AimPart)
-        if not TargetPart then continue end
-        
-        -- Humanoid check
-        local Humanoid = Character:FindFirstChild("Humanoid")
-        if not Humanoid or Humanoid.Health <= 0 then continue end
-        
-        -- Visibility check
-        if _G.AimbotSettings.VisibleCheck then
-            local Ray = Ray.new(Camera.CFrame.Position, (TargetPart.Position - Camera.CFrame.Position).Unit * 1000)
-            local Hit, _ = Workspace:FindPartOnRayWithIgnoreList(Ray, {LocalPlayer.Character, Camera})
-            if Hit and not Hit:IsDescendantOf(Character) then continue end
-        end
-        
-        -- On screen check
-        local TargetPos, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
-        if not OnScreen then continue end
-        
-        -- Distance check from center of screen (not mouse position)
-        local ScreenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        local Distance = (Vector2.new(TargetPos.X, TargetPos.Y) - ScreenCenter).Magnitude
-        
-        -- Check if closest within FOV
-        if Distance < MaxDistance then
-            MaxDistance = Distance
-            Target = TargetPart
-        end
-    end
-    
-    return Target
-end
-
--- Handle input
-UserInputService.InputBegan:Connect(function(Input)
-    if Input.UserInputType == _G.AimbotSettings.AimKey then
-        -- We're pressing the aim button, but not aiming yet
-        -- Record the time when the button was pressed
-        AimStart = tick()
-        -- Aiming flag will be set in the Update function after delay
-    end
-    
-    if Input.KeyCode == Enum.KeyCode.End then
-        UnloadAimbot()
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(Input)
-    if Input.UserInputType == _G.AimbotSettings.AimKey then
-        -- Stop aiming immediately when button is released
-        Aiming = false
-        -- Reset velocity immediately for instant stop
-        CurrentVelocity = Vector2.new(0, 0)
-    end
-end)
-
--- Aimbot update function
-local function Update()
-    -- Check if we should start aiming (after delay has passed)
-    local CurrentTime = tick()
-    if not Aiming and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        -- If button is down and we've passed the delay time, set Aiming to true
-        if CurrentTime - AimStart >= AimDelay then
-            Aiming = true
-        end
-    end
-    
-    -- Get target whether aiming or not (for snap line)
-    local Target = GetClosestPlayer()
-    CurrentTarget = Target  -- Store current target globally
-    
-    -- Update snap line
-    if SnapLine and _G.AimbotSettings.ShowSnapLine then
-        -- Update from position to the center of the screen
-        SnapLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        
-        -- Update to position (target or same as from if no target)
-        if Target then
-            local TargetPos = Camera:WorldToViewportPoint(Target.Position)
-            SnapLine.To = Vector2.new(TargetPos.X, TargetPos.Y)
-            SnapLine.Visible = true
-        else
-            -- If no target, keep line invisible or make it a point
-            if _G.AimbotSettings.ShowSnapLine then
-                SnapLine.To = SnapLine.From
-                SnapLine.Visible = false  -- Hide line when no target
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            -- Try to find the target hitbox (Head, HumanoidRootPart, etc.)
+            local hitboxPart = player.Character:FindFirstChild(targetHitbox)
+            if not hitboxPart then
+                -- Fallback to Head if specified hitbox doesn't exist
+                hitboxPart = player.Character:FindFirstChild("Head")
+                if not hitboxPart then
+                    -- Last resort - try HumanoidRootPart
+                    hitboxPart = player.Character:FindFirstChild("HumanoidRootPart")
+                end
+            end
+            
+            if hitboxPart then
+                local hitboxPosition, onScreen = camera:WorldToViewportPoint(hitboxPart.Position)
+                
+                if onScreen and hitboxPosition.Z > 0 then
+                    local screenPosition = Vector2.new(hitboxPosition.X, hitboxPosition.Y)
+                    local distance = (screenPosition - mousePosition).Magnitude
+                    
+                    if distance < shortestDistance then
+                        closestPlayer = player
+                        shortestDistance = distance
+                    end
+                end
             end
         end
     end
     
-    -- Only change mouse movement when aiming or always track setting is on
-    if Aiming or _G.AimbotSettings.AlwaysTrack then
-        -- If we have a target
-        if Target then
-            -- Get target position with prediction
-            local TargetPos = Camera:WorldToViewportPoint(
-                Target.Position + 
-                (Target.AssemblyLinearVelocity or Vector3.new(0,0,0)) * _G.AimbotSettings.Prediction
-            )
-            
-            -- Calculate direction to target
-            local MousePos = UserInputService:GetMouseLocation()
-            local TargetVector = Vector2.new(TargetPos.X, TargetPos.Y)
-            local Direction = (TargetVector - MousePos)
-            local Distance = Direction.Magnitude
-            
-            -- Calculate target velocity based on distance
-            local TargetSpeed = math.min(Distance * 1.5, _G.AimbotSettings.MaxSpeed)
-            local TargetVelocity = Direction.Unit * TargetSpeed
-            
-            -- Apply smoothness via drag factor
-            CurrentVelocity = CurrentVelocity:Lerp(TargetVelocity, _G.AimbotSettings.Smoothness)
-            
-            -- Apply drag
-            CurrentVelocity = CurrentVelocity * _G.AimbotSettings.DragFactor
-            
-            -- Add jitter for human-like aim
-            if _G.AimbotSettings.JitterEnabled then
-                local jitterX = (math.random() - 0.5) * _G.AimbotSettings.Jitter * 10
-                local jitterY = (math.random() - 0.5) * _G.AimbotSettings.Jitter * 10
-                CurrentVelocity = CurrentVelocity + Vector2.new(jitterX, jitterY)
+    return closestPlayer
+end
+
+local function lockOntoTarget()
+    if not targetPlayer or not targetPlayer.Character or not isAimbotActive then return end
+    
+    -- Try to find the target hitbox (Head, HumanoidRootPart, etc.)
+    local hitboxPart = targetPlayer.Character:FindFirstChild(targetHitbox)
+    if not hitboxPart then
+        -- Fallback to Head if specified hitbox doesn't exist
+        hitboxPart = targetPlayer.Character:FindFirstChild("Head")
+        if not hitboxPart then
+            -- Last resort - try HumanoidRootPart
+            hitboxPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hitboxPart then return end -- No valid target part
+        end
+    end
+    
+    -- Get the target's position on screen
+    local targetPosition, onScreen = camera:WorldToViewportPoint(hitboxPart.Position)
+    
+    if onScreen and targetPosition.Z > 0 then
+        -- Calculate the delta between target position and screen center
+        local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+        local targetScreenPos = Vector2.new(targetPosition.X, targetPosition.Y)
+        local delta = targetScreenPos - screenCenter
+        
+        -- Apply smoothing to the movement
+        delta = delta * AIMBOT_SMOOTHNESS
+        
+        -- Move the mouse instead of changing camera CFrame
+        mousemoverel(delta.X, delta.Y)
+    end
+end
+
+local function updateDrawings()
+    -- Update FOV circle
+    local mousePosition = UserInputService:GetMouseLocation()
+    fovCircle.Position = mousePosition
+    fovCircle.Visible = scriptActive and not isLobbyVisible()
+    
+    -- Update snapline and head circle if target exists
+    if targetPlayer and targetPlayer.Character and isAimbotActive then
+        -- Try to find the target hitbox (Head, HumanoidRootPart, etc.)
+        local targetPart = targetPlayer.Character:FindFirstChild(targetHitbox)
+        if not targetPart then
+            targetPart = targetPlayer.Character:FindFirstChild("Head")
+            if not targetPart then
+                targetPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
             end
+        end
+        
+        if targetPart then
+            local partPosition, onScreen = camera:WorldToViewportPoint(targetPart.Position)
             
-            -- Move mouse
-            local NewPosition = MousePos + CurrentVelocity
-            mousemoveabs(NewPosition.X, NewPosition.Y)
-        else
-            -- Decelerate if no target
-            CurrentVelocity = CurrentVelocity * 0.8
-            
-            if CurrentVelocity.Magnitude > 0.1 then
-                local MousePos = UserInputService:GetMouseLocation()
-                local NewPosition = MousePos + CurrentVelocity
-                mousemoveabs(NewPosition.X, NewPosition.Y)
+            if onScreen and partPosition.Z > 0 then
+                -- Update snapline
+                snapLine.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+                snapLine.To = Vector2.new(partPosition.X, partPosition.Y)
+                snapLine.Visible = true
+                
+                -- Update head circle
+                headCircle.Position = Vector2.new(partPosition.X, partPosition.Y)
+                headCircle.Visible = true
             else
-                CurrentVelocity = Vector2.new(0, 0)
+                snapLine.Visible = false
+                headCircle.Visible = false
             end
+        else
+            snapLine.Visible = false
+            headCircle.Visible = false
         end
     else
-        -- Decelerate when not aiming for smooth release
-        CurrentVelocity = CurrentVelocity * 0.8
-        
-        if CurrentVelocity.Magnitude > 0.1 then
-            local MousePos = UserInputService:GetMouseLocation()
-            local NewPosition = MousePos + CurrentVelocity
-            mousemoveabs(NewPosition.X, NewPosition.Y)
-        else
-            CurrentVelocity = Vector2.new(0, 0)
+        snapLine.Visible = false
+        headCircle.Visible = false
+    end
+end
+
+-- IMPROVED AUTOCLICK FUNCTION: This function has been modified to ensure continuous firing
+local function setupAutoClick()
+    -- Remove any existing connection to avoid duplicates
+    if autoClickConnection then
+        autoClickConnection:Disconnect()
+        autoClickConnection = nil
+    end
+    
+    -- Set up a new auto-click connection that runs on every frame (RenderStepped works better than Heartbeat for this)
+    autoClickConnection = RunService.RenderStepped:Connect(function()
+        -- Only fire if script is active, left mouse is held down, and we're not in lobby
+        if scriptActive and isLeftMouseDown and not isLobbyVisible() then
+            -- Calculate time since last click
+            local currentTime = tick()
+            local timeSinceLastClick = currentTime - lastClickTime
+            
+            -- Check if enough time has passed to click again based on the click interval
+            if timeSinceLastClick >= CLICK_INTERVAL then
+                -- Fire the click
+                mouse1click()
+                -- Update the last click time
+                lastClickTime = currentTime
+            end
         end
-    end
+    end)
 end
 
--- Function to unload aimbot
-function UnloadAimbot()
-    if Connection then 
-        Connection:Disconnect()
+local function cleanupScript()
+    -- Clean up drawings
+    fovCircle:Remove()
+    snapLine:Remove()
+    headCircle:Remove()
+    
+    -- Disconnect any connections
+    if autoClickConnection then
+        autoClickConnection:Disconnect()
+        autoClickConnection = nil
     end
     
-    if FOVCircle then
-        FOVCircle:Remove()
-    end
-    
-    if SnapLine then
-        SnapLine:Remove()
-    end
-    
-    _G.AimbotLoaded = false
-    
-    -- Notify user
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Aimbot Unloaded",
-        Text = "Enhanced aimbot has been unloaded",
-        Duration = 3
-    })
+    -- Reset state
+    scriptActive = false
+    isAimbotActive = false
 end
 
--- Create FOV circle and snap line
-CreateDrawings()
+-- Input handling
+UserInputService.InputBegan:Connect(function(input, isProcessed)
+    if not scriptActive then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and not isProcessed then
+        isLeftMouseDown = true
+        -- Initialize the lastClickTime to current time when mouse is first pressed
+        lastClickTime = tick() - CLICK_INTERVAL  -- Subtract interval to allow an immediate first click
+        setupAutoClick()
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 and not isProcessed then
+        isRightMouseDown = true
+        isAimbotActive = true
+    elseif input.KeyCode == Enum.KeyCode.End then
+        cleanupScript()
+    elseif input.KeyCode == Enum.KeyCode.H and not isProcessed then
+        -- Toggle hitbox (Head, HumanoidRootPart, Torso)
+        if targetHitbox == "Head" then
+            targetHitbox = "HumanoidRootPart"
+            print("Target: HumanoidRootPart")
+        elseif targetHitbox == "HumanoidRootPart" then
+            targetHitbox = "Torso" -- Some games use Torso instead of UpperTorso
+            print("Target: Torso")
+        else
+            targetHitbox = "Head"
+            print("Target: Head")
+        end
+    elseif input.KeyCode == Enum.KeyCode.LeftBracket and not isProcessed then
+        -- Decrease FOV
+        FOV_RADIUS = math.max(50, FOV_RADIUS - 25)
+        fovCircle.Radius = FOV_RADIUS
+        print("FOV: " .. FOV_RADIUS)
+    elseif input.KeyCode == Enum.KeyCode.RightBracket and not isProcessed then
+        -- Increase FOV
+        FOV_RADIUS = math.min(500, FOV_RADIUS + 25)
+        fovCircle.Radius = FOV_RADIUS
+        print("FOV: " .. FOV_RADIUS)
+    end
+end)
 
--- Connect update function
-Connection = RunService.RenderStepped:Connect(Update)
+UserInputService.InputEnded:Connect(function(input, isProcessed)
+    if not scriptActive then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and not isProcessed then
+        isLeftMouseDown = false
+        -- We don't need to disconnect autoClickConnection here,
+        -- it will just not fire clicks since isLeftMouseDown is false
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 and not isProcessed then
+        isRightMouseDown = false
+        isAimbotActive = false
+    end
+end)
 
--- Notify on load
-game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Enhanced Aimbot",
-    Text = "Successfully loaded! Hold right click to aim",
-    Duration = 5
-})
+-- Main update loop
+RunService.RenderStepped:Connect(function()
+    if not scriptActive then return end
+    
+    if not isLobbyVisible() then
+        if isAimbotActive then
+            targetPlayer = getClosestPlayerInFOV()
+            if targetPlayer then
+                lockOntoTarget() -- Use the new targeting function
+            end
+        else
+            targetPlayer = nil
+        end
+        
+        updateDrawings()
+    else
+        -- Hide all visual elements in lobby
+        fovCircle.Visible = false
+        snapLine.Visible = false
+        headCircle.Visible = false
+    end
+end)
 
--- Return confirmation
-return "ENHANCED AIMBOT LOADED"
+-- Print initialization message
+print("=== Enhanced Aimbot with Continuous Firing loaded! ===")
+print("- Hold left mouse button for continuous auto-fire")
+print("- Hold right click to activate aimbot (no auto-fire)")
+print("- Press H to toggle target hitbox (Head, HumanoidRootPart, Torso)")
+print("- Press [ and ] to adjust FOV size")
+print("- Press End to unload script")

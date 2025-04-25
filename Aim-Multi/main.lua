@@ -51,12 +51,12 @@ local function EnhancedRivalsLauncher()
         
         -- Define modules to be loaded
         local moduleUrls = {
-            settings = "https://raw.githubusercontent.com/enhanced-rivals/script/main/modules/settings.lua",
-            utils = "https://raw.githubusercontent.com/enhanced-rivals/script/main/modules/utils.lua",
-            aimbot = "https://raw.githubusercontent.com/enhanced-rivals/script/main/modules/aimbot.lua",
-            esp = "https://raw.githubusercontent.com/enhanced-rivals/script/main/modules/esp.lua",
-            ui = "https://raw.githubusercontent.com/enhanced-rivals/script/main/modules/ui.lua",
-            core = "https://raw.githubusercontent.com/enhanced-rivals/script/main/modules/core.lua"
+            settings = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/settings.lua",
+            utils = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/utils.lua",
+            aimbot = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/aimbot.lua",
+            esp = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/esp.lua",
+            ui = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/ui.lua",
+            core = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/core.lua"
         }
         
         -- Create global table to store modules

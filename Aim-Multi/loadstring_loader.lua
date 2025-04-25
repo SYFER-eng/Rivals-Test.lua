@@ -12,14 +12,14 @@ local function LoadEnhancedRivals()
     
     -- Define API endpoints
     local endpoints = {
-        main = baseUrl .. "/main.lua",
+        main = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/main.lua",
         modules = {
-            settings = baseUrl .. "/modules/settings.lua",
-            utils = baseUrl .. "/modules/utils.lua",
-            aimbot = baseUrl .. "/modules/aimbot.lua",
-            esp = baseUrl .. "/modules/esp.lua",
-            ui = baseUrl .. "/modules/ui.lua",
-            core = baseUrl .. "/modules/core.lua"
+            settings = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/settings.lua",
+            utils = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/utils.lua",
+            aimbot = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/aimbot.lua",
+            esp = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/esp.lua",
+            ui = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/ui.lua",
+            core = baseUrl .. "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/modules/core.lua"
         }
     }
     

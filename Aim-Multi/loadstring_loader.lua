@@ -8,7 +8,7 @@ local function LoadEnhancedRivals()
     print("Starting Enhanced Rivals v3.0 loadstring loader...")
     
     -- URLs for script resources
-    local baseUrl = "https://raw.githubusercontent.com/enhanced-rivals/script/main"
+    local baseUrl = "https://raw.githubusercontent.com/SYFER-eng/Rivals-Test.lua/refs/heads/main/Aim-Multi/main.lua"
     
     -- Define API endpoints
     local endpoints = {
